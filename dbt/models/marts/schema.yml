@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: mart_daily_state_metrics
+    description: Ежедневные метрики транзакций по штатам.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [transaction_date, us_state]
+    columns:
+      - name: transaction_date
+        data_tests: [not_null]
+      - name: us_state
+        data_tests: [not_null]
+      - name: transaction_count
+        data_tests:
+          - value_between:
+              min_value: 1
+
+  - name: mart_fraud_by_category
+    description: Доля фродовых транзакций по категориям.
+    columns:
+      - name: cat_id
+        data_tests: [unique, not_null]
+      - name: fraud_rate
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 1
+
+  - name: mart_fraud_by_state
+    description: Доля фродовых транзакций по штатам.
+    columns:
+      - name: us_state
+        data_tests: [unique, not_null]
+      - name: fraud_rate
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 1
+
+  - name: mart_customer_risk_profile
+    description: Профиль клиентского риска.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: risk_segment
+        data_tests:
+          - accepted_values:
+              values: [low, medium, high]
+
+  - name: mart_hourly_fraud_pattern
+    description: Фродовые паттерны по часу и дню недели.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [day_of_week_name, transaction_hour]
+    columns:
+      - name: transaction_hour
+        data_tests:
+          - value_between:
+              min_value: 0
+              max_value: 23
+
+  - name: mart_merchant_analytics
+    description: Метрики риска по продавцам.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [merch, cat_id]
+    columns:
+      - name: merch
+        data_tests: [not_null]
+      - name: is_suspicious_merchant
+        data_tests:
+          - accepted_values:
+              values: [0, 1]
+
+unit_tests:
+  - name: mart_fraud_by_category_calculates_fraud_rate
+    model: mart_fraud_by_category
+    given:
+      - input: ref('stg_transactions')
+        rows:
+          - {
+              transaction_time: '2020-01-01 00:00:00', transaction_date: '2020-01-01',
+              day_of_week_name: Wednesday, transaction_hour: 0, merch: store_a, cat_id: grocery,
+              amount: 20.0, amount_bucket: low, name_1: Alice, name_2: Smith, customer_id: customer_1,
+              gender: F, street: Main, one_city: Austin, us_state: TX, post_code: '78701', lat: 0.0,
+              lon: 0.0, population_city: 1, jobs: analyst, merchant_lat: 0.0, merchant_lon: 0.0, fraud_flag: 0
+            }
+          - {
+              transaction_time: '2020-01-01 00:01:00', transaction_date: '2020-01-01',
+              day_of_week_name: Wednesday, transaction_hour: 0, merch: store_a, cat_id: grocery,
+              amount: 30.0, amount_bucket: low, name_1: Alice, name_2: Smith, customer_id: customer_1,
+              gender: F, street: Main, one_city: Austin, us_state: TX, post_code: '78701', lat: 0.0,
+              lon: 0.0, population_city: 1, jobs: analyst, merchant_lat: 0.0, merchant_lon: 0.0, fraud_flag: 1
+            }
+          - {
+              transaction_time: '2020-01-01 00:02:00', transaction_date: '2020-01-01',
+              day_of_week_name: Wednesday, transaction_hour: 0, merch: store_b, cat_id: travel,
+              amount: 100.0, amount_bucket: medium, name_1: Bob, name_2: Jones, customer_id: customer_2,
+              gender: M, street: Lake, one_city: Dallas, us_state: TX, post_code: '75201', lat: 0.0,
+              lon: 0.0, population_city: 1, jobs: engineer, merchant_lat: 0.0, merchant_lon: 0.0, fraud_flag: 1
+            }
+    expect:
+      rows:
+        - {cat_id: grocery, transaction_count: 2, fraud_transaction_count: 1, fraud_rate: 0.5, total_amount: 50.0, average_amount: 25.0}
+        - {cat_id: travel, transaction_count: 1, fraud_transaction_count: 1, fraud_rate: 1.0, total_amount: 100.0, average_amount: 100.0}

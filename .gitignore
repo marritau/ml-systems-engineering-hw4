@@ -1,0 +1,8 @@
+data/
+.env
+target/
+logs/
+dbt_packages/
+.user.yml
+*.py[cod]
+__pycache__/

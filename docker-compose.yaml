@@ -1,0 +1,59 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: fraud_dbt_password
+    ports:
+      - "8123:8123"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [analytics]
+
+  data-loader:
+    build: ./loader
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: fraud_dbt_password
+      DATA_PATH: /data/train.csv
+    volumes:
+      - ${TRAIN_DATA_CSV:-./data/train.csv}:/data/train.csv:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
+    networks: [analytics]
+
+  dbt:
+    build: ./dbt
+    environment:
+      DBT_PROFILES_DIR: /usr/app
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: fraud_dbt_password
+    volumes:
+      - ./dbt:/usr/app
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      data-loader:
+        condition: service_completed_successfully
+    command: ["sleep", "infinity"]
+    ports:
+      - "8082:8082"
+    networks: [analytics]
+
+networks:
+  analytics:
+    driver: bridge
+
+volumes:
+  clickhouse-data:

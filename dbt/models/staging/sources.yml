@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: transactions_source
+    description: Исходные транзакции, загруженные из train.csv в ClickHouse.
+    schema: transactions_db
+    tables:
+      - name: transactions
+        description: Транзакции с признаком фрода.
+        columns:
+          - name: transaction_time
+            data_tests:
+              - not_null
+          - name: amount
+            data_tests:
+              - not_null
+              - value_between:
+                  min_value: 0.01
+          - name: target
+            data_tests:
+              - not_null
+              - accepted_values:
+                  values: [0, 1]
